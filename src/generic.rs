@@ -162,6 +162,26 @@ where
     fn capacity(&self) -> Option<U::NonZero> {
         U::maybe(self.fat, self.cap)
     }
+
+    #[inline]
+    #[cfg(feature = "std")]
+    fn with_mut<F, O>(&mut self, func: F) -> O
+    where
+        F: FnOnce(&mut T::Owned) -> O,
+    {
+        use std::{panic, ptr};
+
+        let mut owned = unsafe { ptr::read(self) }.into_owned();
+
+        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| func(&mut owned)));
+
+        unsafe { ptr::write(self, Self::owned(owned)) };
+
+        match result {
+            Ok(out) => out,
+            Err(info) => panic::resume_unwind(info),
+        }
+    }
 }
 
 impl<'a> Cow<'a, str, Wide> {
@@ -550,4 +570,16 @@ where
     T: Beef + ?Sized,
     T::Owned: Unpin,
 {
+}
+
+#[cfg(feature = "std")]
+impl<T, U, A> Extend<A> for Cow<'_, T, U>
+where
+    U: Capacity,
+    T: Beef + ?Sized,
+    T::Owned: Extend<A>,
+{
+    fn extend<I: IntoIterator<Item = A>>(&mut self, iter: I) {
+        self.with_mut(|inner| inner.extend(iter));
+    }
 }

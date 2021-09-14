@@ -37,7 +37,8 @@
 //! ```
 #![cfg_attr(feature = "const_fn", feature(const_fn_trait_bound))]
 #![warn(missing_docs)]
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
+
 extern crate alloc;
 
 mod traits;
@@ -277,6 +278,122 @@ macro_rules! test { ($tmod:ident => $cow:path) => {
             let empty: Cow<[u8]> = Default::default();
 
             assert_eq!(&*empty, b"");
+        }
+
+        #[test]
+        #[cfg(feature = "std")]
+        fn borrowed_extend() {
+            static BYTES: &[u8] = b"Hello, world!" as _;
+            static EXTRA_DATA: &[u8] = b"Goodbye!" as _;
+
+            let expected = BYTES.iter().copied().chain(EXTRA_DATA.iter().copied()).collect::<Vec<_>>();
+
+            let mut bytes: Cow<'static, [u8]> = Cow::borrowed(BYTES);
+
+            bytes.extend(EXTRA_DATA.iter().copied());
+
+            assert_eq!(bytes, expected);
+        }
+
+        #[test]
+        #[cfg(feature = "std")]
+        fn owned_extend() {
+            static BYTES: &[u8] = b"Hello, world!" as _;
+            static EXTRA_DATA: &[u8] = b"Goodbye!" as _;
+
+            let expected = BYTES.iter().copied().chain(EXTRA_DATA.iter().copied()).collect::<Vec<_>>();
+
+            let mut bytes: Cow<'static, [u8]> = Cow::owned(BYTES.to_owned());
+
+            bytes.extend(EXTRA_DATA.iter().copied());
+
+            assert_eq!(bytes, expected);
+        }
+
+        #[test]
+        #[should_panic]
+        #[cfg(feature = "std")]
+        // This should be run under `cargo miri test` to ensure that there are no double-drops, etc.
+        fn misbehaving_extend() {
+            use core::{mem, ptr::NonNull, borrow::Borrow};
+            use crate::traits::{Capacity, Beef};
+
+            const BYTES: [u8; 13] = *b"Hello, world!";
+            static EXTRA_DATA: &[u8] = b"Goodbye!" as _;
+
+            #[repr(transparent)]
+            struct Foo<T: ?Sized>(T);
+
+            struct FooOwned<T>(Vec<T>);
+
+            impl<T: Clone> ToOwned for Foo<[T]> {
+                type Owned = FooOwned<T>;
+            
+                fn to_owned(&self) -> Self::Owned {
+                    FooOwned(self.0.to_owned())
+                }
+            }
+
+            unsafe impl<T: Clone> Beef for Foo<[T]> {
+                type PointerT = T;
+        
+                #[inline]
+                fn ref_into_parts<U>(&self) -> (NonNull<T>, usize, U::Field)
+                where
+                    U: Capacity,
+                {
+                    self.0.ref_into_parts::<U>()
+                }
+        
+                #[inline]
+                unsafe fn ref_from_parts<U>(ptr: NonNull<T>, fat: usize) -> *const Self
+                where
+                    U: Capacity,
+                {
+                    <[T]>::ref_from_parts::<U>(ptr, fat) as _
+                }
+        
+                #[inline]
+                fn owned_into_parts<U>(owned: Self::Owned) -> (NonNull<T>, usize, U::Field)
+                where
+                    U: Capacity,
+                {
+                    <[T]>::owned_into_parts::<U>(owned.0)
+                }
+        
+                #[inline]
+                unsafe fn owned_from_parts<U>(ptr: NonNull<T>, fat: usize, capacity: U::NonZero) -> FooOwned<T>
+                where
+                    U: Capacity,
+                {
+                    FooOwned(<[T]>::owned_from_parts::<U>(ptr, fat, capacity))
+                }
+            }
+
+            impl<T> Borrow<Foo<[T]>> for FooOwned<T> {
+                fn borrow(&self) -> &Foo<[T]> {
+                    unsafe { mem::transmute(<Vec<T> as Borrow<[T]>>::borrow(&self.0)) }
+                }
+            }
+
+            impl<T> Extend<T> for FooOwned<T> {
+                fn extend<I: IntoIterator<Item = T>>(&mut self, _: I) {
+                    panic!()
+                }
+            }
+
+            let foo = Foo(BYTES);
+            let foo: &Foo<[u8]> = &foo;
+
+            {
+                let mut bytes: Cow<_> = Cow::borrowed(foo);
+                bytes.extend(EXTRA_DATA.iter().copied());
+            }
+
+            {
+                let mut bytes: Cow<Foo<[u8]>> = Cow::owned(foo.to_owned());
+                bytes.extend(EXTRA_DATA.iter().copied());
+            }
         }
     }
 } }
