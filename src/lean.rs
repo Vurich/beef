@@ -28,7 +28,7 @@ impl Lean {
     }
 }
 
-impl Capacity for Lean {
+unsafe impl Capacity for Lean {
     type Field = Lean;
     type NonZero = Lean;
 

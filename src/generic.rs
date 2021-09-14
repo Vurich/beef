@@ -315,6 +315,77 @@ where
     }
 }
 
+// Forward any `&mut`-taking methods that do _not_ return borrowed data to `with_mut`.
+//
+// It may be sound to also allow `&mut`-taking methods that return borrowed data, but
+// we should be conservative in which `&mut` methods we allow to avoid exposing too
+// broad a surface of possibly-unsound code.
+#[cfg(feature = "std")]
+impl<U> Cow<'_, str, U>
+where
+    U: Capacity,
+{
+    /// Ensures that this `String`'s capacity is at least `additional` bytes
+    /// larger than its length.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) {
+        self.with_mut(|s| s.reserve(additional));
+    }
+
+    /// Ensures that this `String`'s capacity is `additional` bytes
+    /// larger than its length.
+    #[inline]
+    pub fn reserve_exact(&mut self, additional: usize) {
+        self.with_mut(|s| s.reserve_exact(additional));
+    }
+
+    /// Appends the given [`char`] to the end of this `String`.
+    #[inline]
+    pub fn push(&mut self, ch: char) {
+        self.with_mut(|s| s.push(ch));
+    }
+
+    /// Appends a given string slice onto the end of this `String`.
+    #[inline]
+    pub fn push_str(&mut self, string: &str) {
+        self.with_mut(|s| s.push_str(string));
+    }
+
+    /// Shrinks the capacity of this String to match its length.
+    #[inline]
+    pub fn shrink_to_fit(&mut self) {
+        self.with_mut(|s| s.shrink_to_fit());
+    }
+
+    /// Removes the last character from the string buffer and returns it.
+    ///
+    /// Returns None if this String is empty.
+    pub fn pop(&mut self) -> Option<char> {
+        self.with_mut(|s| s.pop())
+    }
+
+    /// Removes a char from this String at a byte position and returns it.
+    ///
+    /// This is an O(n) operation, as it requires copying every element in the buffer.
+    #[inline]
+    pub fn remove(&mut self, idx: usize) -> char {
+        self.with_mut(|s| s.remove(idx))
+    }
+
+    /// Retains only the characters specified by the predicate.
+    ///
+    /// In other words, remove all characters `c` such that `f(c)` returns `false`.
+    /// This method operates in place, visiting each character exactly once in the
+    /// original order, and preserves the order of the retained characters.
+    #[inline]
+    pub fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(char) -> bool,
+    {
+        self.with_mut(|s| s.retain(f))
+    }
+}
+
 impl<'a, T, U> IntoIterator for &'a Cow<'_, T, U>
 where
     T: Beef + ?Sized,

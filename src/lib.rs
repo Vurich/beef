@@ -41,7 +41,7 @@
 
 extern crate alloc;
 
-mod traits;
+pub mod traits;
 mod wide;
 
 #[cfg(feature = "impl_serde")]

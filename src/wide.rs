@@ -11,18 +11,13 @@ pub(crate) mod internal {
 }
 use internal::Wide;
 
-impl Capacity for Wide {
+unsafe impl Capacity for Wide {
     type Field = Option<NonZeroUsize>;
     type NonZero = NonZeroUsize;
 
     #[inline]
     fn len(fat: usize) -> usize {
         fat
-    }
-
-    #[inline]
-    fn empty(len: usize) -> (usize, Self::Field) {
-        (len, None)
     }
 
     #[inline]

@@ -1,25 +1,41 @@
-pub(crate) use internal::Beef;
-pub(crate) use internal::Capacity;
+//! Internal traits used to pack/unpack pointer, capacity and length
 
-pub(crate) mod internal {
+pub use internal::Beef;
+pub use internal::Capacity;
+
+mod internal {
     use alloc::borrow::ToOwned;
     use alloc::string::String;
     use alloc::vec::Vec;
     use core::mem::ManuallyDrop;
     use core::ptr::{slice_from_raw_parts, NonNull};
 
-    pub trait Capacity {
+    /// A marker type to be used to implement different storage mechanisms for `beef::generic::Cow`
+    ///
+    /// Implementing this trait is `unsafe` since `unsafe` code requires that the methods return
+    /// consistent values, and that `store` and `unpack` are inverses of one another.
+    pub unsafe trait Capacity {
+        /// The "extra" field - at minimum a `usize` must be used, but for `Wide` we need an
+        /// additional usize for capacity.
         type Field: Copy;
+        /// The non-zero variant of `Self::Field`.
         type NonZero: Copy;
 
+        /// Given a (possibly packed) usize, extract just the length value
         fn len(fat: usize) -> usize;
 
-        fn empty(len: usize) -> (usize, Self::Field);
+        /// Get a usize + extra field pair for a length with no capacity
+        fn empty(len: usize) -> (usize, Self::Field) {
+            Self::store(len, 0)
+        }
 
+        /// Get a usize + extra field pair for a length with no capacity
         fn store(len: usize, capacity: usize) -> (usize, Self::Field);
 
+        /// Given a usize + extra field pair, extract length and capacity
         fn unpack(fat: usize, capacity: Self::NonZero) -> (usize, usize);
 
+        /// Given a usize + extra field pair, extract capacity field as-is
         fn maybe(fat: usize, capacity: Self::Field) -> Option<Self::NonZero>;
     }
 
@@ -32,12 +48,16 @@ pub(crate) mod internal {
     /// + `T::Owned` with `capacity` of `0` does not allocate memory.
     /// + `T::Owned` can be reconstructed from `*mut T` borrowed out of it, plus capacity.
     pub unsafe trait Beef: ToOwned {
+        /// The inner pointed-to type
         type PointerT;
 
+        /// Convert a reference to self into a pointer-to-`PointerT`, plus possibly-packed length
+        /// and extra field (see `Capacity`)
         fn ref_into_parts<U>(&self) -> (NonNull<Self::PointerT>, usize, U::Field)
         where
             U: Capacity;
 
+        /// Convert a pointer + length pair into a reference to `Self`
         unsafe fn ref_from_parts<U>(ptr: NonNull<Self::PointerT>, len: usize) -> *const Self
         where
             U: Capacity;

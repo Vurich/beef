@@ -5,7 +5,7 @@ use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 
 use crate::generic::Cow;
-use crate::traits::internal::{Beef, Capacity};
+use crate::traits::{Beef, Capacity};
 
 impl<T, U> Serialize for Cow<'_, T, U>
 where
