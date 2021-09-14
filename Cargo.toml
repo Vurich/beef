@@ -22,13 +22,6 @@ serde_json = "1.0"
 std = []
 default = []
 
-# adds `Cow::const_slice`, the const fn alternative to `Cow::borrowed` for
-# generic &[T] slices.
-# requires nightly: https://github.com/rust-lang/rust/issues/57563
-const_fn = []
-
-impl_serde = ["serde"]
-
 [profile.bench]
 opt-level = 3
 debug = false

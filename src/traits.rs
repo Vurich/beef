@@ -4,11 +4,13 @@ pub use internal::Beef;
 pub use internal::Capacity;
 
 mod internal {
-    use alloc::borrow::ToOwned;
     use alloc::string::String;
     use alloc::vec::Vec;
-    use core::mem::ManuallyDrop;
-    use core::ptr::{slice_from_raw_parts, NonNull};
+    use core::{
+        borrow::Borrow,
+        mem::ManuallyDrop,
+        ptr::{slice_from_raw_parts, NonNull},
+    };
 
     /// A marker type to be used to implement different storage mechanisms for `beef::generic::Cow`
     ///
@@ -47,9 +49,14 @@ mod internal {
     /// + `T::Owned` has a `capacity`, which is an extra word that is absent in `T`.
     /// + `T::Owned` with `capacity` of `0` does not allocate memory.
     /// + `T::Owned` can be reconstructed from `*mut T` borrowed out of it, plus capacity.
-    pub unsafe trait Beef: ToOwned {
+    pub unsafe trait Beef {
         /// The inner pointed-to type
         type PointerT;
+        /// Equivalent to `ToOwned::Owned`, but does not require conversion to be possible.
+        /// This allows more types to be used in `beef::Cow`, although types that don't
+        /// additionally implement `ToOwned` will not be able to call `Cow::to_owned` or
+        /// any methods that rely on it.
+        type Owned: Borrow<Self>;
 
         /// Convert a reference to self into a pointer-to-`PointerT`, plus possibly-packed length
         /// and extra field (see `Capacity`)
@@ -81,6 +88,7 @@ mod internal {
 
     unsafe impl Beef for str {
         type PointerT = u8;
+        type Owned = String;
 
         #[inline]
         fn ref_into_parts<U>(&self) -> (NonNull<u8>, usize, U::Field)
@@ -135,8 +143,9 @@ mod internal {
         }
     }
 
-    unsafe impl<T: Clone> Beef for [T] {
+    unsafe impl<T> Beef for [T] {
         type PointerT = T;
+        type Owned = Vec<T>;
 
         #[inline]
         fn ref_into_parts<U>(&self) -> (NonNull<T>, usize, U::Field)

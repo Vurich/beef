@@ -1,4 +1,7 @@
-use alloc::{borrow::ToOwned, string::String};
+use alloc::{
+    borrow::{Cow as StdCow, ToOwned},
+    string::String,
+};
 use core::{fmt, marker::PhantomData};
 
 use serde::de::{self, Deserialize, Deserializer, Visitor};
@@ -57,9 +60,10 @@ where
     }
 }
 
-impl<'de, 'a, U> Deserialize<'de> for Cow<'a, str, U>
+impl<'de, 'a, T, U> Deserialize<'de> for Cow<'a, T, U>
 where
-    'de: 'a,
+    StdCow<'a, T>: Deserialize<'de>,
+    T: ToOwned<Owned = <T as Beef>::Owned> + Beef + ?Sized,
     U: Capacity,
 {
     #[inline]
@@ -67,22 +71,7 @@ where
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_str(CowVisitor::<'de, 'a, str, U>(PhantomData))
-    }
-}
-
-impl<'de, 'a, T, U> Deserialize<'de> for Cow<'a, [T], U>
-where
-    [T]: Beef,
-    U: Capacity,
-    <[T] as ToOwned>::Owned: Deserialize<'de>,
-{
-    #[inline]
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        <[T] as ToOwned>::Owned::deserialize(deserializer).map(Cow::owned)
+        StdCow::deserialize(deserializer).map(Into::into)
     }
 }
 

@@ -2,7 +2,7 @@
 //! and the traits that are available to it.
 
 use alloc::{
-    borrow::{Borrow, Cow as StdCow},
+    borrow::{Borrow, Cow as StdCow, ToOwned},
     string::String,
     vec::Vec,
 };
@@ -97,7 +97,10 @@ where
     ///
     /// Clones the data if it is not already owned.
     #[inline]
-    pub fn into_owned(self) -> T::Owned {
+    pub fn into_owned(self) -> <T as ToOwned>::Owned
+    where
+        T: ToOwned<Owned = <T as Beef>::Owned>,
+    {
         let cow = ManuallyDrop::new(self);
 
         match cow.capacity() {
@@ -172,7 +175,8 @@ where
     #[cfg(feature = "std")]
     fn with_mut<F, O>(&mut self, func: F) -> O
     where
-        F: FnOnce(&mut T::Owned) -> O,
+        F: FnOnce(&mut <T as ToOwned>::Owned) -> O,
+        T: ToOwned<Owned = <T as Beef>::Owned>,
     {
         use std::{panic, ptr};
 
@@ -186,19 +190,6 @@ where
             Ok(out) => out,
             Err(info) => panic::resume_unwind(info),
         }
-    }
-}
-
-impl<T, U> Cow<'_, T, U>
-where
-    for<'any> &'any T: IntoIterator,
-    T: Beef + ?Sized,
-    U: Capacity,
-{
-    /// Returns an iterator over the borrowed elements of the `Cow`.
-    #[inline]
-    pub fn iter(&self) -> <&'_ Self as IntoIterator>::IntoIter {
-        self.into_iter()
     }
 }
 
@@ -253,13 +244,7 @@ impl<'a> Cow<'a, str, Lean> {
     }
 }
 
-// This requires nightly:
-// https://github.com/rust-lang/rust/issues/57563
-#[cfg(feature = "const_fn")]
-impl<'a, T> Cow<'a, [T], Wide>
-where
-    T: Clone,
-{
+impl<'a, T> Cow<'a, [T], Wide> {
     /// Borrowed data.
     ///
     /// This is functionally identical to [`borrow`](./generic/struct.Cow.html#method.borrow).
@@ -284,13 +269,8 @@ where
     }
 }
 
-// This requires nightly:
-// https://github.com/rust-lang/rust/issues/57563
-#[cfg(all(feature = "const_fn", target_pointer_width = "64"))]
-impl<'a, T> Cow<'a, [T], Lean>
-where
-    T: Clone,
-{
+#[cfg(target_pointer_width = "64")]
+impl<'a, T> Cow<'a, [T], Lean> {
     /// Borrowed data.
     ///
     /// This i functionally identical to [`borrow`](./generic/struct.Cow.html#method.borrow).
@@ -501,7 +481,7 @@ where
 
 impl<'a, T, U> Clone for Cow<'a, T, U>
 where
-    T: Beef + ?Sized,
+    T: ToOwned<Owned = <T as Beef>::Owned> + Beef + ?Sized,
     U: Capacity,
 {
     #[inline]
@@ -550,7 +530,7 @@ where
 
 impl<'a, T, U> From<StdCow<'a, T>> for Cow<'a, T, U>
 where
-    T: Beef + ?Sized,
+    T: ToOwned<Owned = <T as Beef>::Owned> + Beef + ?Sized,
     U: Capacity,
 {
     #[inline]
@@ -564,7 +544,7 @@ where
 
 impl<'a, T, U> From<Cow<'a, T, U>> for StdCow<'a, T>
 where
-    T: Beef + ?Sized,
+    T: ToOwned<Owned = <T as Beef>::Owned> + Beef + ?Sized,
     U: Capacity,
 {
     #[inline]
@@ -679,8 +659,8 @@ where
 impl<T, U, A> Extend<A> for Cow<'_, T, U>
 where
     U: Capacity,
-    T: Beef + ?Sized,
-    T::Owned: Extend<A>,
+    T: ToOwned<Owned = <T as Beef>::Owned> + Beef + ?Sized,
+    <T as ToOwned>::Owned: Extend<A>,
 {
     fn extend<I: IntoIterator<Item = A>>(&mut self, iter: I) {
         self.with_mut(|inner| inner.extend(iter));

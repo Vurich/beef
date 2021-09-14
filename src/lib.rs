@@ -35,7 +35,6 @@
 //! #[cfg(target_pointer_width = "64")]
 //! assert_eq!(size_of::<beef::lean::Cow<str>>(), 2 * WORD);
 //! ```
-#![cfg_attr(feature = "const_fn", feature(const_fn_trait_bound))]
 #![warn(missing_docs)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
@@ -44,7 +43,7 @@ extern crate alloc;
 pub mod traits;
 mod wide;
 
-#[cfg(feature = "impl_serde")]
+#[cfg(feature = "serde")]
 mod serde;
 
 pub mod generic;
@@ -259,7 +258,6 @@ macro_rules! test { ($tmod:ident => $cow:path) => {
         }
 
         #[test]
-        #[cfg(feature = "const_fn")]
         fn const_fn_slice() {
             const FOO: Cow<[u8]> = Cow::const_slice(b"bar");
 
@@ -336,6 +334,7 @@ macro_rules! test { ($tmod:ident => $cow:path) => {
 
             unsafe impl<T: Clone> Beef for Foo<[T]> {
                 type PointerT = T;
+                type Owned = FooOwned<T>;
         
                 #[inline]
                 fn ref_into_parts<U>(&self) -> (NonNull<T>, usize, U::Field)
