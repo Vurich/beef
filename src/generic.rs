@@ -1,15 +1,20 @@
 //! This module contains the actual, albeit generic, implementaiton of the `Cow`,
 //! and the traits that are available to it.
 
-use alloc::borrow::{Borrow, Cow as StdCow};
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::cmp::Ordering;
-use core::fmt;
-use core::hash::{Hash, Hasher};
-use core::marker::PhantomData;
-use core::mem::ManuallyDrop;
-use core::ptr::NonNull;
+use alloc::{
+    borrow::{Borrow, Cow as StdCow},
+    string::String,
+    vec::Vec,
+};
+use core::{
+    cmp::Ordering,
+    fmt,
+    hash::{Hash, Hasher},
+    iter::IntoIterator,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    ptr::NonNull,
+};
 
 #[cfg(target_pointer_width = "64")]
 use crate::lean::internal::Lean;
@@ -184,6 +189,19 @@ where
     }
 }
 
+impl<T, U> Cow<'_, T, U>
+where
+    for<'any> &'any T: IntoIterator,
+    T: Beef + ?Sized,
+    U: Capacity,
+{
+    /// Returns an iterator over the borrowed elements of the `Cow`.
+    #[inline]
+    pub fn iter(&self) -> <&'_ Self as IntoIterator>::IntoIter {
+        self.into_iter()
+    }
+}
+
 impl<'a> Cow<'a, str, Wide> {
     /// Borrowed data.
     ///
@@ -294,6 +312,20 @@ where
             cap: Lean,
             marker: PhantomData,
         }
+    }
+}
+
+impl<'a, T, U> IntoIterator for &'a Cow<'_, T, U>
+where
+    T: Beef + ?Sized,
+    &'a T: IntoIterator,
+    U: Capacity,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_ref().into_iter()
     }
 }
 
